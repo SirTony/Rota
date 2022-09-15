@@ -21,6 +21,9 @@ public sealed class JobScheduler
     /// </summary>
     public JobSchedulerConfiguration Configuration { get; }
 
+    /// <summary>
+    ///     The total number of active jobs in all active worker threads.
+    /// </summary>
     public int ActiveJobs => this._workers.Sum( pair => pair.Value.ActiveJobs );
 
     /// <summary>

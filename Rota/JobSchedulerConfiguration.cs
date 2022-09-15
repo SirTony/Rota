@@ -5,6 +5,9 @@
 /// </summary>
 public sealed class JobSchedulerConfiguration
 {
+    /// <summary>
+    ///     The default job scheduler configuration options.
+    /// </summary>
     public static JobSchedulerConfiguration Default { get; } = new()
     {
         // allow (theoretically) all workers to spin up at the same time ...
