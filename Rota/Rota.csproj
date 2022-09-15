@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Authors>Tony J. Stark; $(AssemblyName) Contributors</Authors>
+    <Company>Tony J. Stark</Company>
+    <Description>A robust yet simple job scheduling library.</Description>
+    <Copyright>Copyright © 2022 Tony J. Stark</Copyright>
+    <PackageProjectUrl>https://github.com/SirTony/Rota</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/SirTony/Rota</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>job scheduling;scheduler;scheduling;task scheduling</PackageTags>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <FileVersion>1.0.0</FileVersion>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Cronos" Version="0.7.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.2" />
+    <PackageReference Include="Nito.AsyncEx.Coordination" Version="5.1.2" />
+    <PackageReference Include="System.Threading.RateLimiting" Version="7.0.0-rc.1.22426.10" />
+  </ItemGroup>
+
+</Project>
