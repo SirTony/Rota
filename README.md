@@ -1,6 +1,6 @@
 # Rota
 
-A simple yet robust job scheduling library that aims to be simpler and easier to use than [Quartz.NET](https://www.quartz-scheduler.net/), but also more robust and configurable than other simple schedulers like [Corvael](https://github.com/jamesmh/coravel) while providing sensible default configuration options such that for light use little to no configuration is actually required beyond setting up job schedules.
+A simple yet robust job scheduling library that aims to be simpler and easier to use than [Quartz.NET](https://www.quartz-scheduler.net/), but also more robust and configurable than other simple schedulers like [Coravel](https://github.com/jamesmh/coravel) while providing sensible default configuration options such that for light use little to no configuration is actually required beyond setting up job schedules.
 
 Rota was heavily inspired by Coravel.
 
