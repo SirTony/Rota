@@ -8,7 +8,7 @@ public interface IJob
     /// <summary>
     ///     The optional name of the job. Used only to provide a friendly name to the thread.
     /// </summary>
-    string? Name { get; }
+    public string? Name => null;
 
     /// <summary>
     ///     Executes the job's business logic.

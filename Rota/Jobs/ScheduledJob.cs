@@ -43,12 +43,14 @@ internal readonly record struct ScheduledJob(
 
         await job.ExecuteAsync( cancellationToken );
 
+        // ReSharper disable once SuspiciousTypeConversion.Global
         if( job is IAsyncDisposable asyncDisposable )
         {
             logger?.LogTrace( "disposing job {id} asynchronously", this.Id );
             await asyncDisposable.DisposeAsync();
         }
 
+        // ReSharper disable once SuspiciousTypeConversion.Global
         if( job is IDisposable disposable )
         {
             logger?.LogTrace( "disposing job {id} synchronously", this.Id );

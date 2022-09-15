@@ -7,10 +7,17 @@ namespace Rota.Scheduling;
 /// </summary>
 public abstract class Schedule
 {
-    private   bool      _firstRun = true;
-    private   DateTime? _nextDueAt;
-    private   bool      _runImmediately;
-    protected DateTime? LastDueAt { get; private set; }
+    private bool      _firstRun = true;
+    private DateTime? _lastDueAt;
+    private DateTime? _nextDueAt;
+    private bool      _runImmediately;
+
+    /// <summary>
+    ///     The date and time at which this schedule was last due.
+    ///     When accessed, this <see cref="DateTime" /> is converted to the timezone specified by <see cref="TimeZone" /> when
+    ///     applicable.
+    /// </summary>
+    protected DateTime? LastDueAt => this._lastDueAt is null ? null : this.ConvertToZonedTime( this._lastDueAt.Value );
 
     /// <summary>
     ///     Allows the schedule to be timezone aware if a schedule is to be executed at a specific time relative to the local
@@ -97,7 +104,7 @@ public abstract class Schedule
 
         if( this._nextDueAt.Value > relativeStart ) return false;
 
-        this.LastDueAt       = this._nextDueAt;
+        this._lastDueAt      = this._nextDueAt;
         this._firstRun       = false;
         this._runImmediately = false;
         this._nextDueAt      = null;
