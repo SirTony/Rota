@@ -18,6 +18,6 @@ public class CronSchedule : Schedule
         => this._cron = cron ?? throw new ArgumentNullException( nameof( cron ) );
 
     /// <inheritdoc />
-    protected override DateTime GetNextOccurrence( DateTime relativeStart )
+    public override DateTime GetNextOccurrence( DateTime relativeStart )
         => this._cron.GetNextOccurrence( relativeStart, this.TimeZone ?? TimeZoneInfo.Utc, true ) ?? DateTime.MaxValue;
 }

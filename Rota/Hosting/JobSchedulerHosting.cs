@@ -71,8 +71,7 @@ public static class JobSchedulerHosting
     /// <param name="builder">The instance of the host builder currently being configured.</param>
     /// <returns>The instance of the host builder currently being configured.</returns>
     public static IHostBuilder AddScheduler( this IHostBuilder builder )
-    {
-        return builder.ConfigureServices(
+        => builder.ConfigureServices(
             ( _, services ) => services.AddSingleton(
                                             provider => new JobScheduler(
                                                 provider.GetService<JobSchedulerConfiguration>(),
@@ -81,7 +80,6 @@ public static class JobSchedulerHosting
                                         )
                                        .AddHostedService<JobSchedulerService>()
         );
-    }
 
     /// <summary>
     ///     Retrieves the <see cref="JobScheduler" /> instance from the service container and makes it available for use.

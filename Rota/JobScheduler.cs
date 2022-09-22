@@ -65,7 +65,8 @@ public sealed class JobScheduler
     /// </summary>
     /// <typeparam name="T">The job type used to lookup the worker thread.</typeparam>
     /// <param name="config">A <see langword="delegate" /> used to configure the worker thread.</param>
-    public void ConfigureJobRunner<T>( Action<JobRunner> config ) where T : IJob
+    public void ConfigureJobRunner<T>( Action<JobRunner> config )
+        where T : IJob
         => this.ConfigureJobRunner( typeof( T ).FullName!, config );
 
     /// <summary>
@@ -79,17 +80,17 @@ public sealed class JobScheduler
     public void ConfigureJobRunner( string workerName, Action<JobRunner> config )
     {
         if( String.IsNullOrWhiteSpace( workerName ) )
+        {
             throw new ArgumentNullException(
                 nameof( workerName ),
                 "Worker name cannot be null, empty, or consist entirely of whitespace"
             );
+        }
 
         if( config is null ) throw new ArgumentNullException( nameof( config ) );
 
         if( this._workers.TryGetValue( workerName, out var worker ) )
-        {
             config( worker );
-        }
         else
         {
             worker = new JobRunner(
@@ -115,7 +116,9 @@ public sealed class JobScheduler
     public JobScheduler ScheduleJob<T>(
         Schedule         schedule,
         params object?[] constructorArguments
-    ) where T : IJob => this.ScheduleJobOnWorkerImpl<T>( null, schedule, constructorArguments );
+    )
+        where T : IJob
+        => this.ScheduleJobOnWorkerImpl<T>( null, schedule, constructorArguments );
 
     /// <summary>
     ///     Registers a job on the scheduler on the specified worker thread.
@@ -132,17 +135,20 @@ public sealed class JobScheduler
         string           workerName,
         Schedule         schedule,
         params object?[] constructorArguments
-    ) where T : IJob => this.ScheduleJobOnWorkerImpl<T>(
-        workerName,
-        schedule,
-        constructorArguments
-    );
+    )
+        where T : IJob
+        => this.ScheduleJobOnWorkerImpl<T>(
+            workerName,
+            schedule,
+            constructorArguments
+        );
 
     private JobScheduler ScheduleJobOnWorkerImpl<T>(
         string?               workerName,
         Schedule              schedule,
         IEnumerable<object?>? constructorArguments
-    ) where T : IJob
+    )
+        where T : IJob
     {
         if( schedule is null ) throw new ArgumentNullException( nameof( schedule ) );
 
@@ -155,9 +161,7 @@ public sealed class JobScheduler
 
         workerName = String.IsNullOrWhiteSpace( workerName ) ? typeof( T ).FullName! : workerName;
         if( this._workers.TryGetValue( workerName, out var worker ) )
-        {
             worker.Jobs.Add( job );
-        }
         else
         {
             this._workers[workerName] = new JobRunner(
@@ -229,8 +233,7 @@ public sealed class JobScheduler
                 break;
             }
 
-            default:
-                throw new NotSupportedException();
+            default: throw new NotSupportedException();
         }
 
         Thread.CurrentThread.Name = null;
@@ -252,7 +255,7 @@ public sealed class JobScheduler
     /// <returns></returns>
     public async ValueTask WaitForAllJobsToExitAsync()
     {
-        while( ( this.ActiveJobs > 0 ) && !this._cancellationTokenSource.IsCancellationRequested )
+        while( this.ActiveJobs > 0 && !this._cancellationTokenSource.IsCancellationRequested )
             await Task.Delay( TimeSpan.FromMilliseconds( 50 ), CancellationToken.None );
     }
 }

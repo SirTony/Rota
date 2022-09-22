@@ -17,11 +17,10 @@ public class IntervalSchedule : Schedule
     public IntervalSchedule( TimeSpan interval ) => this.Interval = interval;
 
     /// <inheritdoc />
-    protected override DateTime GetNextOccurrence( DateTime relativeStart ) => this.LastDueAt is not null
-                                                                                   ? this.LastDueAt.Value
-                                                                                     + this.Interval
-                                                                                   : this.ConvertToZonedTime(
-                                                                                           relativeStart
-                                                                                       )
-                                                                                     + this.Interval;
+    public override DateTime GetNextOccurrence( DateTime relativeStart )
+        => this.LastDueAt is not null
+            ? this.LastDueAt.Value
+            + this.Interval
+            : this.ConvertToZonedTime( relativeStart )
+            + this.Interval;
 }

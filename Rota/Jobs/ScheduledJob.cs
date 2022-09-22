@@ -20,14 +20,14 @@ internal readonly record struct ScheduledJob(
 
         var ctorArgs = this.ConstructorArguments.ToArray();
         var jobInstance = provider is not null
-                              ? ActivatorUtilities.CreateInstance( provider, this.JobType, ctorArgs! )
-                              : Activator.CreateInstance(
-                                  this.JobType,
-                                  BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                                  null,
-                                  ctorArgs,
-                                  CultureInfo.CurrentCulture
-                              );
+            ? ActivatorUtilities.CreateInstance( provider, this.JobType, ctorArgs! )
+            : Activator.CreateInstance(
+                this.JobType,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                null,
+                ctorArgs,
+                CultureInfo.CurrentCulture
+            );
 
         var logger = provider?.GetService<ILogger<ScheduledJob>>();
         if( jobInstance is null or not IJob )

@@ -1,4 +1,5 @@
-﻿using Cronos;
+﻿using System.Threading.RateLimiting;
+using Cronos;
 
 namespace Rota.Scheduling;
 
@@ -13,11 +14,16 @@ public abstract class Schedule
     private bool      _runImmediately;
 
     /// <summary>
+    ///     The date and time at which this schedule will next trigger.
+    /// </summary>
+    public DateTime? NextDueAt => this._nextDueAt is null ? null : this.ConvertToZonedTime( this._nextDueAt.Value );
+
+    /// <summary>
     ///     The date and time at which this schedule was last due.
     ///     When accessed, this <see cref="DateTime" /> is converted to the timezone specified by <see cref="TimeZone" /> when
     ///     applicable.
     /// </summary>
-    protected DateTime? LastDueAt => this._lastDueAt is null ? null : this.ConvertToZonedTime( this._lastDueAt.Value );
+    public DateTime? LastDueAt => this._lastDueAt is null ? null : this.ConvertToZonedTime( this._lastDueAt.Value );
 
     /// <summary>
     ///     Allows the schedule to be timezone aware if a schedule is to be executed at a specific time relative to the local
@@ -35,14 +41,32 @@ public abstract class Schedule
     public static CronSchedule FromCron(
         string     cronExpression,
         CronFormat format = CronFormat.IncludeSeconds
-    ) => new( CronExpression.Parse( cronExpression, format ) );
+    )
+        => new(CronExpression.Parse( cronExpression, format ));
 
     /// <summary>
     ///     Creates a simple schedule that simply triggers after a specified delay.
     /// </summary>
     /// <param name="interval">The interval at which this schedule triggers.</param>
     /// <returns>The schedule constructed from the specified interval.</returns>
-    public static IntervalSchedule FromInterval( TimeSpan interval ) => new( interval );
+    public static IntervalSchedule FromInterval( TimeSpan interval ) => new(interval);
+
+    /// <summary>
+    ///     Creates a new scheduler that wraps an existing schedule within a rate limiter.
+    /// </summary>
+    /// <param name="baseSchedule">The schedule to be rate limited.</param>
+    /// <param name="rateLimiter">The rate limiter acting on <paramref name="baseSchedule" />.</param>
+    /// <param name="debounceDuration">
+    ///     The minimum amount of time between occurrences of <paramref name="baseSchedule" />
+    ///     regardless of other rate limiting or schedule settings.
+    /// </param>
+    /// <returns>The schedule created from the specified base and rate limiter.</returns>
+    public static RateLimitedSchedule WithRateLimiter(
+        Schedule    baseSchedule,
+        RateLimiter rateLimiter,
+        TimeSpan    debounceDuration = default
+    )
+        => new(baseSchedule, rateLimiter, debounceDuration);
 
     /// <summary>
     ///     Indicates that this schedule allows the job it is attached to to run immediately after being registered with the
@@ -62,11 +86,11 @@ public abstract class Schedule
     ///     Allows the schedule to be timezone aware if a schedule is to be executed at a specific time relative to the local
     ///     timezone.
     /// </summary>
-    /// <param name="tzInfo">The specified timezone.</param>
+    /// <param name="timeZoneInfo">The specified timezone.</param>
     /// <returns>The current schedule instance to allow for fluent configuration.</returns>
-    public Schedule ZonedTo( TimeZoneInfo tzInfo )
+    public Schedule ZonedTo( TimeZoneInfo timeZoneInfo )
     {
-        this.TimeZone = tzInfo;
+        this.TimeZone = timeZoneInfo;
         return this;
     }
 
@@ -99,12 +123,15 @@ public abstract class Schedule
             return true;
         }
 
-        relativeStart   =   this.ConvertToZonedTime( relativeStart );
+        relativeStart = this._lastDueAt is not null && this._lastDueAt.Value > relativeStart
+            ? this.ConvertToZonedTime( this._lastDueAt.Value )
+            : this.ConvertToZonedTime( relativeStart );
+
         this._nextDueAt ??= this.GetNextOccurrence( relativeStart );
 
         if( this._nextDueAt.Value > relativeStart ) return false;
 
-        this._lastDueAt      = this._nextDueAt;
+        this._lastDueAt      = this.NextDueAt;
         this._firstRun       = false;
         this._runImmediately = false;
         this._nextDueAt      = null;
@@ -113,17 +140,29 @@ public abstract class Schedule
     }
 
     /// <summary>
-    ///     Converts <paramref name="dt" /> to this schedule's specified timezone, if present.
+    ///     Skips over the next due time previously calculated by <see cref="GetNextOccurrence" /> and forces the schedule
+    ///     to re-calculate a later due time.
     /// </summary>
-    /// <param name="dt">The date and time to adjust.</param>
+    public virtual void SkipOccurrence()
+    {
+        this._lastDueAt = this._nextDueAt;
+        this._nextDueAt = null;
+    }
+
+    /// <summary>
+    ///     Converts <paramref name="dateTime" /> to this schedule's specified timezone, if present.
+    /// </summary>
+    /// <param name="dateTime">The date and time to adjust.</param>
     /// <returns>The adjusted date and time.</returns>
-    protected DateTime ConvertToZonedTime( DateTime dt )
-        => TimeZoneInfo.ConvertTime( dt, this.TimeZone ?? TimeZoneInfo.Utc );
+    protected DateTime ConvertToZonedTime( DateTime dateTime )
+        => TimeZoneInfo.ConvertTime( dateTime, this.TimeZone ?? TimeZoneInfo.Utc );
 
     /// <summary>
     ///     Computes the date and time at which the schedule will next trigger.
+    ///     Depending on the implementation, repeated calls to this method could result in the schedule skipping ahead
+    ///     and missing one or more of it's scheduled occurrences.
     /// </summary>
     /// <param name="relativeStart">The current time to compare against.</param>
     /// <returns>The date and time at which the schedule will next trigger.</returns>
-    protected abstract DateTime GetNextOccurrence( DateTime relativeStart );
+    public abstract DateTime GetNextOccurrence( DateTime relativeStart );
 }

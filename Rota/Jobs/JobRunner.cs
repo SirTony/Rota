@@ -109,8 +109,7 @@ public sealed class JobRunner
                 break;
             }
 
-            default:
-                throw new NotSupportedException();
+            default: throw new NotSupportedException();
         }
 
         Thread.CurrentThread.Name = this.Name;

@@ -17,8 +17,7 @@ public sealed class JobSchedulerConfiguration
         // ... but restrict the jobs within each worker to one-at-a-time
         DefaultJobExecutionMode      = ExecutionMode.Consecutive,
         DefaultJobMaximumConcurrency = null,
-
-        PollingRate = TimeSpan.FromMilliseconds( 500 ),
+        PollingRate                  = TimeSpan.FromMilliseconds( 500 ),
     };
 
     /// <summary>

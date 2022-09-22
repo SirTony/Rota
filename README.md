@@ -1,28 +1,42 @@
 # Rota
 
-A simple yet robust job scheduling library that aims to be simpler and easier to use than [Quartz.NET](https://www.quartz-scheduler.net/), but also more robust and configurable than other simple schedulers like [Coravel](https://github.com/jamesmh/coravel) while providing sensible default configuration options such that for light use little to no configuration is actually required beyond setting up job schedules.
+A simple yet robust job scheduling library that aims to be simpler and easier to use
+than [Quartz.NET](https://www.quartz-scheduler.net/), but also more robust and configurable than other simple schedulers
+like [Coravel](https://github.com/jamesmh/coravel) while providing sensible default configuration options such that for
+light use little to no configuration is actually required beyond setting up job schedules.
 
 Rota was heavily inspired by Coravel.
 
 # Features
 
 - [x] Job scheduling
+    - [x] Simple schedule that triggers on an interval.
+    - [x] Schedule that uses cron expressions.
+    - [x] Schedule that uses a rate limiter to further restrict exection.
+    - [ ] Complex schedule that can build highly specific schedules without needing to know cron expressions.
 - [x] Multiple execution modes.
-  - [x] Concurrent/parallel execution.
-  - [x] Consecutive execution.
+    - [x] Concurrent/parallel execution.
+    - [x] Consecutive execution.
 - [x] Granular control of configuration.
 - [x] [Microsoft.Extensions.Hosting](https://docs.microsoft.com/en-us/dotnet/core/extensions/generic-host) support.
-- [ ] Caching.
-  - [ ] Built-in persistent cache providers.
-  
+- [ ] Caching & persistence for schedules, and jobs.
+    - [ ] Built-in cache providers.
+        - [ ] JSON
+        - [ ] XML
+        - [ ] MongoDB
+        - [ ] PgSQL
+        - [ ] MySQL/MariaDB
+        - [ ] SQLite
+        - [ ] [SurrealDB](https://github.com/surrealdb/surrealdb)
+
 # Quick Start
 
 Rota is available on [NuGet](https://www.nuget.org/packages/Rota/).
 
 ## Manual
 
-Below is a minimal example of a job that prints `Hello, World!` to the console every 10 seconds on a manually managed job scheduler.
-
+Below is a minimal example of a job that prints `Hello, World!` to the console every 10 seconds on a manually managed
+job scheduler.
 
 ``` csharp
 using Rota;
@@ -44,8 +58,6 @@ while( !scheduler.IsCancellationRequested )
 
 public sealed class HelloWorldJob : IJob
 {
-    public string Name => "HelloWorld";
-
     public async ValueTask ExecuteAsync( CancellationToken cancellationToken )
         => await Console.Out.WriteLineAsync( "Hello, World!" );
 }
@@ -54,7 +66,9 @@ public sealed class HelloWorldJob : IJob
 
 ## Hosted
 
-Below is a minimal example of a job that prints `Hello, World!` to the console every 10 seconds using a scheduler registered to a hosting context. It also demonstrates dependency injection support by using an `ILogger` instance to print to the console.
+Below is a minimal example of a job that prints `Hello, World!` to the console every 10 seconds using a scheduler
+registered to a hosting context. It also demonstrates dependency injection support by using an `ILogger` instance to
+print to the console.
 
 ``` csharp
 using Microsoft.Extensions.Hosting;
@@ -74,14 +88,13 @@ host.UseScheduler(
         var everyTenSeconds = Schedule.FromInterval( TimeSpan.FromSeconds( 10 ) ).RunOnceAtStartup();
 
         scheduler.ScheduleJob<HelloWorldJob>( everyTenSeconds ); // HelloWorldJob will execute every 10 seconds
-    } );
+    }
+);
 
 await host.RunAsync();
 
 public sealed class HelloWorldJob : IJob
 {
-    public string Name => "HelloWorld";
-
     private readonly ILogger<HelloWorldJob> _logger;
 
     public HelloWorldJob( ILogger<HelloWorldJob> logger ) => this._logger = logger;
