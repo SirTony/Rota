@@ -18,6 +18,8 @@ public sealed class JobSchedulerConfiguration
         DefaultJobExecutionMode      = ExecutionMode.Consecutive,
         DefaultJobMaximumConcurrency = null,
         PollingRate                  = TimeSpan.FromMilliseconds( 500 ),
+        ErrorHandlingStrategy        = ErrorHandlingStrategy.StopScheduler,
+        ErrorHandler                 = null,
     };
 
     /// <summary>
@@ -53,4 +55,15 @@ public sealed class JobSchedulerConfiguration
     ///     This may also be used in a manual loop for the same purpose if desired.
     /// </summary>
     public TimeSpan PollingRate { get; init; }
+
+    /// <summary>
+    ///     Used to determine how the job scheduler should behave when encountering exceptions.
+    /// </summary>
+    public ErrorHandlingStrategy ErrorHandlingStrategy { get; init; }
+
+    /// <summary>
+    ///     A callback that will be invoked whenever the scheduler encounters an exception,
+    ///     regardless of what <see cref="ErrorHandlingStrategy" /> is set to.
+    /// </summary>
+    public Action<Exception>? ErrorHandler { get; init; }
 }

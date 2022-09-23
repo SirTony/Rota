@@ -35,9 +35,10 @@ public sealed class RateLimitedSchedule : Schedule
     public override bool IsDue( DateTime relativeStart )
     {
         if( this.ConvertToZonedTime( relativeStart ) - this.LastDueAt < this._debounce ) return false;
+        if( !base.IsDue( relativeStart ) ) return false;
 
         using var lease = this._rateLimiter.AttemptAcquire();
-        return lease.IsAcquired && base.IsDue( relativeStart );
+        return lease.IsAcquired;
     }
 
     /// <inheritdoc />

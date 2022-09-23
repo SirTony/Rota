@@ -7,16 +7,20 @@ using Rota.Scheduling;
 
 namespace Rota.Jobs;
 
-internal readonly record struct ScheduledJob(
-    Guid                    Id,
-    Type                    JobType,
-    Schedule                Schedule,
-    ImmutableArray<object?> ConstructorArguments
+internal record struct ScheduledJob(
+    Guid                      Id,
+    Type                      JobType,
+    Schedule                  Schedule,
+    JobSchedulerConfiguration Configuration,
+    ImmutableArray<object?>   ConstructorArguments
 )
 {
+    private bool _isDisabled = false;
+
     public async ValueTask ExecuteAsync( IServiceProvider? provider, CancellationToken cancellationToken )
     {
-        if( cancellationToken.IsCancellationRequested || !this.Schedule.IsDue( DateTime.UtcNow ) ) return;
+        if( this._isDisabled || cancellationToken.IsCancellationRequested || !this.Schedule.IsDue( DateTime.UtcNow ) )
+            return;
 
         var ctorArgs = this.ConstructorArguments.ToArray();
         var jobInstance = provider is not null
@@ -36,25 +40,40 @@ internal readonly record struct ScheduledJob(
             return;
         }
 
-        logger?.LogTrace( "executing job {id}", this.Id );
         var job = (IJob)jobInstance;
+        var fullJobName = String.IsNullOrWhiteSpace( job.Name )
+            ? $"{this.JobType.FullName}::{this.Id}"
+            : $"{this.JobType.FullName}::{this.Id} ({job.Name})";
 
         if( !String.IsNullOrWhiteSpace( job.Name ) ) Thread.CurrentThread.Name += $" [{job.Name}]";
 
-        await job.ExecuteAsync( cancellationToken );
-
-        // ReSharper disable once SuspiciousTypeConversion.Global
-        if( job is IAsyncDisposable asyncDisposable )
+        logger?.LogTrace( "executing job {FullJobName}", fullJobName );
+        try { await job.ExecuteAsync( cancellationToken ); }
+        catch( Exception ex )
+            when( this.Configuration.ErrorHandlingStrategy is ErrorHandlingStrategy.DisableJob )
         {
-            logger?.LogTrace( "disposing job {id} asynchronously", this.Id );
-            await asyncDisposable.DisposeAsync();
+            this._isDisabled = true;
+            logger?.LogError(
+                "{FullJobName} has encountered an exception and has been permanently disabled",
+                fullJobName
+            );
+            this.Configuration?.ErrorHandler?.Invoke( ex );
         }
-
-        // ReSharper disable once SuspiciousTypeConversion.Global
-        if( job is IDisposable disposable )
+        finally
         {
-            logger?.LogTrace( "disposing job {id} synchronously", this.Id );
-            disposable.Dispose();
+            // ReSharper disable once SuspiciousTypeConversion.Global
+            if( job is IAsyncDisposable asyncDisposable )
+            {
+                logger?.LogTrace( "disposing job {id} asynchronously", this.Id );
+                await asyncDisposable.DisposeAsync();
+            }
+
+            // ReSharper disable once SuspiciousTypeConversion.Global
+            if( job is IDisposable disposable )
+            {
+                logger?.LogTrace( "disposing job {id} synchronously", this.Id );
+                disposable.Dispose();
+            }
         }
     }
 }

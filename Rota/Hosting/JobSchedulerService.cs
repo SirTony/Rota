@@ -27,7 +27,7 @@ public sealed class JobSchedulerService : IHostedService, IDisposable
 
     private async void Tick( object? state )
     {
-        if( !this._shouldRun ) return;
+        if( !this._shouldRun || this._scheduler.IsCancellationRequested || this._scheduler.IsDisabled ) return;
         await this._scheduler.RunJobsAsync();
     }
 
@@ -44,7 +44,7 @@ public sealed class JobSchedulerService : IHostedService, IDisposable
     public Task StartAsync( CancellationToken cancellationToken )
     {
         this._shouldRun = true;
-        this._logger.LogInformation( "Scheduler service started." );
+        this._logger.LogInformation( "Scheduler service started" );
 
         return Task.CompletedTask;
     }
@@ -56,11 +56,12 @@ public sealed class JobSchedulerService : IHostedService, IDisposable
     /// <returns>A task that completes when the scheduler has stopped and all active jobs have terminated.</returns>
     public async Task StopAsync( CancellationToken cancellationToken )
     {
-        this._logger.LogInformation( "Scheduler service stopping." );
-        this._shouldRun = false;
+        this._logger.LogInformation( "Scheduler service stopping" );
+        this._shouldRun            = false;
+        this._scheduler.IsDisabled = true;
         this._scheduler.CancelAllJobs();
 
         await this._scheduler.WaitForAllJobsToExitAsync();
-        this._logger.LogInformation( "Scheduler service stopped." );
+        this._logger.LogInformation( "Scheduler service stopped" );
     }
 }

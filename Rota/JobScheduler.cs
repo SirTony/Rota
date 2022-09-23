@@ -1,5 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Nito.AsyncEx;
 using Rota.Jobs;
 using Rota.Scheduling;
@@ -15,6 +17,17 @@ public sealed class JobScheduler
     private readonly CancellationTokenSource                 _cancellationTokenSource;
     private readonly IServiceProvider?                       _provider;
     private readonly ConcurrentDictionary<string, JobRunner> _workers;
+
+    /// <summary>
+    ///     Determines whether or not the scheduler has been disabled.
+    ///     By default, this property is set to <see langword="false" />, but may be set to <see langword="true" />
+    ///     internally if one of the job throw an exception during execution if
+    ///     <see cref="JobSchedulerConfiguration.ErrorHandlingStrategy" /> s set to
+    ///     <see cref="ErrorHandlingStrategy.StopScheduler" />.
+    ///     It is possible to re-enable the scheduler programatically although it will just disable itself again
+    ///     when another job or job runner throws an exception unless graceful error handling is implemented.
+    /// </summary>
+    public bool IsDisabled { get; set; }
 
     /// <summary>
     ///     The scheduler's current configuration.
@@ -52,6 +65,7 @@ public sealed class JobScheduler
     /// </param>
     public JobScheduler( JobSchedulerConfiguration? config = null, IServiceProvider? provider = null )
     {
+        this.IsDisabled               = false;
         this._cancellationTokenSource = new CancellationTokenSource();
         this.Configuration            = config ?? JobSchedulerConfiguration.Default;
         this._provider                = provider;
@@ -95,8 +109,7 @@ public sealed class JobScheduler
         {
             worker = new JobRunner(
                 workerName,
-                this.Configuration.DefaultJobExecutionMode,
-                this.Configuration.DefaultJobMaximumConcurrency
+                this.Configuration
             );
 
             this._workers[workerName] = worker;
@@ -156,6 +169,7 @@ public sealed class JobScheduler
             Guid.NewGuid(),
             typeof( T ),
             schedule,
+            this.Configuration,
             ImmutableArray.CreateRange( constructorArguments ?? Enumerable.Empty<object?>() )
         );
 
@@ -166,8 +180,7 @@ public sealed class JobScheduler
         {
             this._workers[workerName] = new JobRunner(
                 workerName,
-                this.Configuration.DefaultJobExecutionMode,
-                this.Configuration.DefaultJobMaximumConcurrency
+                this.Configuration
             );
 
             this._workers[workerName].Jobs.Add( job );
@@ -184,7 +197,7 @@ public sealed class JobScheduler
     /// <exception cref="NotSupportedException">Thrown when an invalid <see cref="ExecutionMode" /> is specified.</exception>
     public async ValueTask RunJobsAsync()
     {
-        if( this._cancellationTokenSource.IsCancellationRequested ) return;
+        if( this._cancellationTokenSource.IsCancellationRequested || this.IsDisabled ) return;
         switch( this.Configuration.JobRunnerExecutionMode )
         {
             case ExecutionMode.Concurrent:
@@ -202,7 +215,8 @@ public sealed class JobScheduler
                                  async () => {
                                      Thread.CurrentThread.Name = pair.Key;
                                      await semaphore.WaitAsync( this._cancellationTokenSource.Token );
-                                     await pair.Value.ExecuteJobs(
+                                     await this.TryRunWorkerThread(
+                                         pair.Value,
                                          this._provider,
                                          this._cancellationTokenSource.Token
                                      );
@@ -224,7 +238,11 @@ public sealed class JobScheduler
                     await Task.Run(
                         async () => {
                             Thread.CurrentThread.Name = name;
-                            await worker.ExecuteJobs( this._provider, this._cancellationTokenSource.Token );
+                            await this.TryRunWorkerThread(
+                                worker,
+                                this._provider,
+                                this._cancellationTokenSource.Token
+                            );
                         },
                         this._cancellationTokenSource.Token
                     );
@@ -257,5 +275,21 @@ public sealed class JobScheduler
     {
         while( this.ActiveJobs > 0 && !this._cancellationTokenSource.IsCancellationRequested )
             await Task.Delay( TimeSpan.FromMilliseconds( 50 ), CancellationToken.None );
+    }
+
+    private async ValueTask TryRunWorkerThread(
+        JobRunner         runner,
+        IServiceProvider? provider,
+        CancellationToken cancellationToken
+    )
+    {
+        try { await runner.ExecuteJobs( provider, cancellationToken ); }
+        catch( Exception ex ) when( this.Configuration.ErrorHandlingStrategy is ErrorHandlingStrategy.StopScheduler )
+        {
+            this.IsDisabled = true;
+            provider?.GetService<ILogger<JobScheduler>>()
+                    ?.LogError( "Terminating scheduler due to an excception in worker thread {Name}", runner.Name );
+            this.Configuration.ErrorHandler?.Invoke( ex );
+        }
     }
 }

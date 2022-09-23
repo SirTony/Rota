@@ -140,16 +140,6 @@ public abstract class Schedule
     }
 
     /// <summary>
-    ///     Skips over the next due time previously calculated by <see cref="GetNextOccurrence" /> and forces the schedule
-    ///     to re-calculate a later due time.
-    /// </summary>
-    public virtual void SkipOccurrence()
-    {
-        this._lastDueAt = this._nextDueAt;
-        this._nextDueAt = null;
-    }
-
-    /// <summary>
     ///     Converts <paramref name="dateTime" /> to this schedule's specified timezone, if present.
     /// </summary>
     /// <param name="dateTime">The date and time to adjust.</param>
