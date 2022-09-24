@@ -12,7 +12,7 @@ Rota was heavily inspired by Coravel.
 - [x] Job scheduling
     - [x] Simple schedule that triggers on an interval.
     - [x] Schedule that uses cron expressions.
-    - [x] Schedule that uses a rate limiter to further restrict exection.
+    - [x] Schedule that uses a rate limiter to further restrict execution.
     - [ ] Complex schedule that can build highly specific schedules without needing to know cron expressions.
 - [x] Multiple execution modes.
     - [x] Concurrent/parallel execution.
