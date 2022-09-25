@@ -82,6 +82,17 @@ public sealed class JobScheduler
     public void ConfigureJobRunner<T>( Action<JobRunner> config )
         where T : IJob
         => this.ConfigureJobRunner( typeof( T ).FullName!, config );
+    
+    /// <summary>
+    ///     Gets a worker thread for the specified job type.
+    ///     Even if no jobs of type <typeparamref name="T" /> have been registered yet, the worker thread will be created
+    ///     and may be configured ahead of any jobs being registered to id.
+    /// </summary>
+    /// <typeparam name="T">The job type used to lookup the worker thread.</typeparam>
+    /// <returns>The worker thread the specified job type <typeparamref name="T" /> will run on.</returns>
+    public JobRunner FindJobRunner<T>()
+        where T : IJob
+        => this.FindJobRunner( typeof( T ).FullName! );
 
     /// <summary>
     ///     Configures a worker thread for the specified job type.
@@ -93,6 +104,20 @@ public sealed class JobScheduler
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="config" /> is <see langword="null" /></exception>
     public void ConfigureJobRunner( string workerName, Action<JobRunner> config )
     {
+        if( config is null ) throw new ArgumentNullException( nameof( config ) );
+        config( this.FindJobRunner( workerName ) );
+    }
+
+    /// <summary>
+    ///     Gets a worker thread for the specified job type.
+    ///     Even if no jobs of type <typeparamref name="T" /> have been registered yet, the worker thread will be created
+    ///     and may be configured ahead of any jobs being registered to id.
+    /// </summary>
+    /// <param name="workerName">The name of the worker thread.</param>
+    /// <returns>The worker thread of the specified name.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="config" /> is <see langword="null" /></exception>
+    public JobRunner FindJobRunner( string workerName )
+    {
         if( String.IsNullOrWhiteSpace( workerName ) )
         {
             throw new ArgumentNullException(
@@ -101,10 +126,8 @@ public sealed class JobScheduler
             );
         }
 
-        if( config is null ) throw new ArgumentNullException( nameof( config ) );
-
         if( this._workers.TryGetValue( workerName, out var worker ) )
-            config( worker );
+            return worker;
         else
         {
             worker = new JobRunner(
@@ -112,8 +135,7 @@ public sealed class JobScheduler
                 this.Configuration
             );
 
-            this._workers[workerName] = worker;
-            config( worker );
+            return this._workers[workerName] = worker;
         }
     }
 
@@ -167,15 +189,15 @@ public sealed class JobScheduler
 
         var job = new ScheduledJob(
             Guid.NewGuid(),
-            typeof( T ),
             schedule,
-            this.Configuration,
-            ImmutableArray.CreateRange( constructorArguments ?? Enumerable.Empty<object?>() )
+            typeof( T ),
+            constructorArguments ?? Enumerable.Empty<object?>(),
+            this.Configuration 
         );
 
         workerName = String.IsNullOrWhiteSpace( workerName ) ? typeof( T ).FullName! : workerName;
         if( this._workers.TryGetValue( workerName, out var worker ) )
-            worker.Jobs.Add( job );
+            worker.ScheduledJobs.Add( job );
         else
         {
             this._workers[workerName] = new JobRunner(
@@ -183,7 +205,7 @@ public sealed class JobScheduler
                 this.Configuration
             );
 
-            this._workers[workerName].Jobs.Add( job );
+            this._workers[workerName].ScheduledJobs.Add( job );
         }
 
         return this;

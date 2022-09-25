@@ -7,26 +7,63 @@ using Rota.Scheduling;
 
 namespace Rota.Jobs;
 
-internal record struct ScheduledJob(
-    Guid                      Id,
-    Type                      JobType,
-    Schedule                  Schedule,
-    JobSchedulerConfiguration Configuration,
-    ImmutableArray<object?>   ConstructorArguments
-)
+/// <summary>
+/// Represents a job that is managed by the scheduler.
+/// </summary>
+public sealed class ScheduledJob
 {
-    private bool _isDisabled = false;
+    /// <summary>
+    /// A unique identifier for this job.
+    /// This identifier is unique across all jobs of the same underlying type across all worker threads.
+    /// </summary>
+    public           Guid     Id       { get; }
+    
+    /// <summary>
+    /// The <see cref="Rota.Scheduling.Schedule" /> that determines when this job executes.
+    /// </summary>
+    public           Schedule Schedule { get; }
 
-    public async ValueTask ExecuteAsync( IServiceProvider? provider, CancellationToken cancellationToken )
+    /// <summary>
+    ///     Determines whether or not this job has been disabled.
+    ///     By default, this property is set to <see langword="false" />, but may be set to <see langword="true" />
+    ///     internally if this job throws an exception during execution if
+    ///     <see cref="JobSchedulerConfiguration.ErrorHandlingStrategy" /> s set to
+    ///     <see cref="ErrorHandlingStrategy.DisableJob" />.
+    ///     It is possible to re-enable this job programatically although it will just disable itself again
+    ///     when it throws an exception unless graceful error handling is implemented.
+    /// </summary>
+    public bool IsDisabled { get; set; } = false;
+    
+    private readonly JobSchedulerConfiguration _configuration;
+    private readonly Type                      _jobType;
+    private readonly ImmutableArray<object?>   _constructorArguments;
+
+    internal ScheduledJob(
+        Guid                      id,
+        Schedule                  schedule,
+        Type                      jobType,
+        IEnumerable<object?>      ctorArgs,
+        JobSchedulerConfiguration configuration
+    )
     {
-        if( this._isDisabled || cancellationToken.IsCancellationRequested || !this.Schedule.IsDue( DateTime.UtcNow ) )
+        this.Id                    = id;
+        this.Schedule              = schedule;
+        this.Schedule              = schedule;
+        this._jobType              = jobType;
+        this._configuration        = configuration;
+        this._constructorArguments = ImmutableArray.CreateRange( ctorArgs );
+    }
+
+    internal async ValueTask ExecuteAsync( IServiceProvider? provider, CancellationToken cancellationToken )
+    {
+        if( this.IsDisabled || cancellationToken.IsCancellationRequested || !this.Schedule.IsDue( DateTime.UtcNow ) )
             return;
 
-        var ctorArgs = this.ConstructorArguments.ToArray();
+        var ctorArgs = this._constructorArguments.ToArray();
         var jobInstance = provider is not null
-            ? ActivatorUtilities.CreateInstance( provider, this.JobType, ctorArgs! )
+            ? ActivatorUtilities.CreateInstance( provider, this._jobType, ctorArgs! )
             : Activator.CreateInstance(
-                this.JobType,
+                this._jobType,
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
                 null,
                 ctorArgs,
@@ -42,38 +79,41 @@ internal record struct ScheduledJob(
 
         var job = (IJob)jobInstance;
         var fullJobName = String.IsNullOrWhiteSpace( job.Name )
-            ? $"{this.JobType.FullName}::{this.Id}"
-            : $"{this.JobType.FullName}::{this.Id} ({job.Name})";
+            ? $"{this._jobType.FullName}::{this.Id}"
+            : $"{this._jobType.FullName}::{this.Id} ({job.Name})";
 
         if( !String.IsNullOrWhiteSpace( job.Name ) ) Thread.CurrentThread.Name += $" [{job.Name}]";
 
         logger?.LogTrace( "executing job {FullJobName}", fullJobName );
         try { await job.ExecuteAsync( cancellationToken ); }
         catch( Exception ex )
-            when( this.Configuration.ErrorHandlingStrategy is ErrorHandlingStrategy.DisableJob )
+            when( this._configuration.ErrorHandlingStrategy is ErrorHandlingStrategy.DisableJob )
         {
-            this._isDisabled = true;
+            this.IsDisabled = true;
             logger?.LogError(
                 "{FullJobName} has encountered an exception and has been permanently disabled",
                 fullJobName
             );
-            this.Configuration?.ErrorHandler?.Invoke( ex );
+            this._configuration.ErrorHandler?.Invoke( ex );
         }
         finally
         {
             // ReSharper disable once SuspiciousTypeConversion.Global
             if( job is IAsyncDisposable asyncDisposable )
             {
-                logger?.LogTrace( "disposing job {id} asynchronously", this.Id );
+                logger?.LogTrace( "disposing job {Id} asynchronously", this.Id );
                 await asyncDisposable.DisposeAsync();
             }
 
             // ReSharper disable once SuspiciousTypeConversion.Global
             if( job is IDisposable disposable )
             {
-                logger?.LogTrace( "disposing job {id} synchronously", this.Id );
+                logger?.LogTrace( "disposing job {Id} synchronously", this.Id );
                 disposable.Dispose();
             }
         }
     }
+
+    /// <inheritdoc />
+    public override string ToString() => $"{this._jobType.FullName}::{this.Id}";
 }

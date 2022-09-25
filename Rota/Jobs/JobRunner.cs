@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Nito.AsyncEx;
@@ -29,15 +30,20 @@ public sealed class JobRunner
     /// <summary>
     ///     Determines whether or not this job runner has been disabled.
     ///     By default, this property is set to <see langword="false" />, but may be set to <see langword="true" />
-    ///     internally if one of the job throw an exception during execution if
+    ///     internally if one of the jobs throws an exception during execution if
     ///     <see cref="JobSchedulerConfiguration.ErrorHandlingStrategy" /> s set to
     ///     <see cref="ErrorHandlingStrategy.DisableWorker" />.
     ///     It is possible to re-enable this worker programatically although it will just disable itself again
-    ///     when another job throws an exception unless graceful error handling is implemented within the job.
+    ///     when another job throws an exception unless graceful error handling is implemented within the problematic job.
     /// </summary>
     public bool IsDisabled { get; set; }
 
-    internal ConcurrentBag<ScheduledJob> Jobs { get; }
+    /// <summary>
+    /// Gets an immutable collection containing the jobs registered to this worker thread.
+    /// </summary>
+    public ImmutableArray<ScheduledJob> Jobs => this.ScheduledJobs.ToImmutableArray();
+
+    internal ConcurrentBag<ScheduledJob> ScheduledJobs { get; }
 
     internal JobRunner( string name, JobSchedulerConfiguration configuration )
     {
@@ -46,7 +52,7 @@ public sealed class JobRunner
         this._maximumConcurrency = configuration.JobRunnerMaximumConcurrency;
         this.IsDisabled          = false;
         this._configuration      = configuration;
-        this.Jobs                = new ConcurrentBag<ScheduledJob>();
+        this.ScheduledJobs                = new ConcurrentBag<ScheduledJob>();
     }
 
     /// <summary>
@@ -108,7 +114,7 @@ public sealed class JobRunner
                         : this._maximumConcurrency.Value
                 );
                 var tasks =
-                    this.Jobs
+                    this.ScheduledJobs
                         .Select(
                              job => Task.Run(
                                  async () => {
@@ -130,7 +136,7 @@ public sealed class JobRunner
 
             case ExecutionMode.Consecutive:
             {
-                foreach( var job in this.Jobs )
+                foreach( var job in this.ScheduledJobs )
                 {
                     await Task.Run(
                         async () => {
@@ -165,10 +171,9 @@ public sealed class JobRunner
             this.IsDisabled = true;
             provider?.GetService<ILogger<JobRunner>>()
                     ?.LogError(
-                          "Worker thread {Name} encountered an error while executing job {FullName}::{Id} and has been permanently disabled",
+                          "Worker thread {Name} encountered an error while executing job {JobName} and has been permanently disabled",
                           this.Name,
-                          job.JobType.FullName,
-                          job.Id
+                          job
                       );
             this._configuration.ErrorHandler?.Invoke( ex );
         }
