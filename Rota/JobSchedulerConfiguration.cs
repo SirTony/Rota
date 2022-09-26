@@ -12,41 +12,45 @@ public sealed class JobSchedulerConfiguration
     {
         // allow (theoretically) all workers to spin up at the same time ...
         JobRunnerExecutionMode      = ExecutionMode.Concurrent,
-        JobRunnerMaximumConcurrency = 100,
+        JobRunnerMaximumConcurrency = null,
 
         // ... but restrict the jobs within each worker to one-at-a-time
-        DefaultJobExecutionMode      = ExecutionMode.Consecutive,
-        DefaultJobMaximumConcurrency = null,
-        PollingRate                  = TimeSpan.FromMilliseconds( 500 ),
-        ErrorHandlingStrategy        = ErrorHandlingStrategy.StopScheduler,
-        ErrorHandler                 = null,
+        JobSchedulerExecutionMode      = ExecutionMode.Consecutive,
+        JobSchedulerMaximumConcurrency = null,
+        PollingRate                    = TimeSpan.FromMilliseconds( 500 ),
+        ErrorHandlingStrategy          = ErrorHandlingStrategy.StopScheduler,
+        ErrorHandler                   = null,
     };
 
     /// <summary>
-    ///     The execution mode that all job runners in a scheduler will abide by.
+    ///     The execution mode of the job runner, determining how the jobs within the runner thread will be spun up.
+    ///     This need not be the same as the scheduler's execution mode.
     ///     See each member of the <see cref="ExecutionMode" /> <see langword="enum" /> for the specifics of each mode.
     /// </summary>
     public ExecutionMode JobRunnerExecutionMode { get; init; }
 
     /// <summary>
     ///     Optional. Only used when <see cref="JobRunnerExecutionMode" /> is <see cref="ExecutionMode.Concurrent" />.
-    ///     If omitted or set to 0, concurrent executions will be unlimited.
+    ///     If omitted this will default to twice the number of available logical CPU cores
+    ///     (i.e. 8 for a quad-core without SMT, or 16 for a quad-core with SMT). If set to 0, it will allow for unlimited
+    ///     concurrency.
     /// </summary>
     public ushort? JobRunnerMaximumConcurrency { get; init; }
 
     /// <summary>
-    ///     The default execution mode of the jobs within each worker thread.
+    ///     The execution mode of the job scheduler, determining how the job runner threads will be spun up by the scheduler.
     ///     This need not be the same as the job runner's execution mode.
-    ///     May be changed later by configuring a worker thread with <see cref="JobScheduler.ConfigureJobRunner{T}" />.
     ///     See each member of the <see cref="ExecutionMode" /> <see langword="enum" /> for the specifics of each mode.
     /// </summary>
-    public ExecutionMode DefaultJobExecutionMode { get; init; }
+    public ExecutionMode JobSchedulerExecutionMode { get; init; }
 
     /// <summary>
-    ///     Optional. Only used when <see cref="DefaultJobExecutionMode" /> is <see cref="ExecutionMode.Concurrent" />.
-    ///     If omitted or set to 0, concurrent executions will be unlimited.
+    ///     Optional. Only used when <see cref="JobSchedulerExecutionMode" /> is <see cref="ExecutionMode.Concurrent" />.
+    ///     If omitted this will default to the number of available logical CPU cores
+    ///     (i.e. 4 for a quad-core without SMT, or 8 for a quad-core with SMT). If set to 0, it will allow for unlimited
+    ///     concurrency.
     /// </summary>
-    public ushort? DefaultJobMaximumConcurrency { get; init; }
+    public ushort? JobSchedulerMaximumConcurrency { get; init; }
 
     /// <summary>
     ///     Used primarily in a hosted context by <seealso cref="Hosting.JobSchedulerService" /> to determine how often

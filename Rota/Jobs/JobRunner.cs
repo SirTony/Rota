@@ -1,8 +1,8 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Threading.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Nito.AsyncEx;
 
 namespace Rota.Jobs;
 
@@ -11,11 +11,33 @@ namespace Rota.Jobs;
 /// </summary>
 public sealed class JobRunner
 {
+    private readonly RateLimiter               _concurrencyLimiter;
     private readonly JobSchedulerConfiguration _configuration;
     private          int                       _activeJobs;
 
-    private ExecutionMode _executionMode;
-    private ushort?       _maximumConcurrency;
+    internal JobRunner( string name, JobSchedulerConfiguration configuration )
+    {
+        this.Name           = name;
+        this.IsDisabled     = false;
+        this._configuration = configuration;
+        this.ScheduledJobs  = new ConcurrentBag<ScheduledJob>();
+
+        var concurrencyLimit = this._configuration.JobRunnerMaximumConcurrency switch
+        {
+            null  => Environment.ProcessorCount * 2,
+            0     => Int32.MaxValue,
+            var x => x.Value,
+        };
+
+        var limiterOptions = new ConcurrencyLimiterOptions
+        {
+            PermitLimit          = concurrencyLimit,
+            QueueLimit           = concurrencyLimit * 2,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+        };
+
+        this._concurrencyLimiter = new ConcurrencyLimiter( limiterOptions );
+    }
 
     /// <summary>
     ///     The current number of jobs active on this thread.
@@ -39,96 +61,37 @@ public sealed class JobRunner
     public bool IsDisabled { get; set; }
 
     /// <summary>
-    /// Gets an immutable collection containing the jobs registered to this worker thread.
+    ///     Gets an immutable collection containing the jobs registered to this worker thread.
     /// </summary>
     public ImmutableArray<ScheduledJob> Jobs => this.ScheduledJobs.ToImmutableArray();
 
     internal ConcurrentBag<ScheduledJob> ScheduledJobs { get; }
 
-    internal JobRunner( string name, JobSchedulerConfiguration configuration )
-    {
-        this.Name                = name;
-        this._executionMode      = configuration.JobRunnerExecutionMode;
-        this._maximumConcurrency = configuration.JobRunnerMaximumConcurrency;
-        this.IsDisabled          = false;
-        this._configuration      = configuration;
-        this.ScheduledJobs                = new ConcurrentBag<ScheduledJob>();
-    }
-
-    /// <summary>
-    ///     Sets this thread to execute jobs concurrently.
-    /// </summary>
-    /// <param name="maximumConcurrency">
-    ///     The maximum number of jobs that may be running at any given time.
-    ///     If set to 0, concurrent execution will be unlimited.
-    /// </param>
-    /// <returns>The current job runner instance to allow for fluent configuration.</returns>
-    public JobRunner Concurrently( ushort maximumConcurrency )
-    {
-        this._executionMode      = ExecutionMode.Concurrent;
-        this._maximumConcurrency = maximumConcurrency;
-        return this;
-    }
-
-    /// <summary>
-    ///     Sets this thread to execute jobs consecutively.
-    /// </summary>
-    /// <returns>The current job runner instance to allow for fluent configuration.</returns>
-    public JobRunner Consecutively()
-    {
-        this._executionMode      = ExecutionMode.Consecutive;
-        this._maximumConcurrency = null;
-        return this;
-    }
-
-    /// <summary>
-    ///     Marks this job runner as enabled, allowing normal job execution.
-    /// </summary>
-    /// <returns>The current job runner instance to allow for fluent configuration.</returns>
-    public JobRunner Enabled()
-    {
-        this.IsDisabled = false;
-        return this;
-    }
-
-    /// <summary>
-    ///     Marks this jop runner as disabled, disallowing all job executions.
-    /// </summary>
-    /// <returns>The current job runner instance to allow for fluent configuration.</returns>
-    public JobRunner Disabled()
-    {
-        this.IsDisabled = true;
-        return this;
-    }
-
     internal async ValueTask ExecuteJobs( IServiceProvider? provider, CancellationToken cancellationToken )
     {
         if( this.IsDisabled || cancellationToken.IsCancellationRequested ) return;
-        switch( this._executionMode )
+        switch( this._configuration.JobRunnerExecutionMode )
         {
             case ExecutionMode.Concurrent:
             {
-                var semaphore = new AsyncSemaphore(
-                    this._maximumConcurrency is null or 0
-                        ? Int64.MaxValue
-                        : this._maximumConcurrency.Value
-                );
-                var tasks =
-                    this.ScheduledJobs
-                        .Select(
-                             job => Task.Run(
-                                 async () => {
-                                     Thread.CurrentThread.Name = $"{this.Name} - {job.Id}";
-                                     await semaphore.WaitAsync( cancellationToken );
-                                     _ = Interlocked.Increment( ref this._activeJobs );
-                                     await this.TryExecuteJob( job, provider, cancellationToken );
-                                     semaphore.Release( 1 );
-                                     _ = Interlocked.Decrement( ref this._activeJobs );
-                                 },
-                                 cancellationToken
-                             )
-                         )
-                        .ToList();
+                var tasks = this.ScheduledJobs
+                                .Select(
+                                     job => Task.Run(
+                                         async () => {
+                                             Thread.CurrentThread.Name = $"{this.Name} - {job.Id}";
+                                             var lease = await this._concurrencyLimiter.AcquireAsync(
+                                                 1, cancellationToken );
+                                             if( !lease.IsAcquired ) return;
+
+                                             _ = Interlocked.Increment( ref this._activeJobs );
+                                             await this.TryExecuteJob( job, provider, cancellationToken );
+                                             _ = Interlocked.Decrement( ref this._activeJobs );
+                                             lease.Dispose();
+                                         },
+                                         cancellationToken
+                                     )
+                                 )
+                                .ToList();
 
                 await Task.WhenAll( tasks );
                 break;
@@ -165,7 +128,16 @@ public sealed class JobRunner
         CancellationToken cancellationToken
     )
     {
-        try { await job.ExecuteAsync( provider, cancellationToken ); }
+        try
+        {
+            await job.ExecuteAsync( provider, cancellationToken );
+        }
+        catch( TaskCanceledException )
+        {
+        }
+        catch( Exception ) when( this._configuration.ErrorHandlingStrategy is ErrorHandlingStrategy.Ignore )
+        {
+        }
         catch( Exception ex ) when( this._configuration.ErrorHandlingStrategy is ErrorHandlingStrategy.DisableWorker )
         {
             this.IsDisabled = true;

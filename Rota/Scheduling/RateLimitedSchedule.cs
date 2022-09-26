@@ -7,10 +7,6 @@ namespace Rota.Scheduling;
 /// </summary>
 public sealed class RateLimitedSchedule : Schedule
 {
-    private readonly Schedule    _baseSchedule;
-    private readonly TimeSpan    _debounce;
-    private readonly RateLimiter _rateLimiter;
-
     /// <summary>
     ///     Creates a new scheduler that wraps an existing schedule within a rate limiter.
     /// </summary>
@@ -26,22 +22,36 @@ public sealed class RateLimitedSchedule : Schedule
     /// </exception>
     public RateLimitedSchedule( Schedule baseSchedule, RateLimiter rateLimiter, TimeSpan debounceDuration = default )
     {
-        this._baseSchedule = baseSchedule ?? throw new ArgumentNullException( nameof( baseSchedule ) );
-        this._rateLimiter  = rateLimiter  ?? throw new ArgumentNullException( nameof( rateLimiter ) );
-        this._debounce     = debounceDuration;
+        this.BaseSchedule     = baseSchedule ?? throw new ArgumentNullException( nameof( baseSchedule ) );
+        this.RateLimiter      = rateLimiter  ?? throw new ArgumentNullException( nameof( rateLimiter ) );
+        this.DebounceDuration = debounceDuration;
     }
+
+    /// <summary>
+    ///     The underlying schedule that determines when this schedule is due.
+    /// </summary>
+    public Schedule BaseSchedule { get; }
+
+    /// <summary>
+    ///     The minimum duration between occurrences of this schedule.
+    ///     Even if <see cref="BaseSchedule" /> triggers more frequently than this duration,
+    ///     it will still be limited by this property.
+    /// </summary>
+    public TimeSpan DebounceDuration { get; set; }
+
+    /// <summary>
+    ///     The rate limiter that further restricts when <see cref="BaseSchedule" /> triggers.
+    /// </summary>
+    public RateLimiter RateLimiter { get; }
 
     /// <inheritdoc />
     public override bool IsDue( DateTime relativeStart )
     {
-        if( this.ConvertToZonedTime( relativeStart ) - this.LastDueAt < this._debounce ) return false;
-        if( !base.IsDue( relativeStart ) ) return false;
-
-        using var lease = this._rateLimiter.AttemptAcquire();
-        return lease.IsAcquired;
+        var diff = this.LastDueAt - this.ConvertToZonedTime( relativeStart ) ?? TimeSpan.Zero;
+        return diff <= this.DebounceDuration && base.IsDue( relativeStart );
     }
 
     /// <inheritdoc />
-    public override DateTime GetNextOccurrence( DateTime relativeStart )
-        => this._baseSchedule.GetNextOccurrence( relativeStart );
+    public override DateTime GetNextOccurrence( DateTime relativeStart ) =>
+        this.BaseSchedule.GetNextOccurrence( relativeStart );
 }

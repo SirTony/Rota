@@ -33,6 +33,12 @@ public abstract class Schedule
     public TimeZoneInfo? TimeZone { get; set; }
 
     /// <summary>
+    ///     Gets or sets whether this schedule is disabled.
+    ///     When a scheduler is disabled it will never come due, disallowing all jobs that use the schedule from executing.
+    /// </summary>
+    public bool IsDisabled { get; set; }
+
+    /// <summary>
     ///     Creates a new schedule using a cron expression.
     /// </summary>
     /// <param name="cronExpression">The cron expression to parse.</param>
@@ -41,15 +47,15 @@ public abstract class Schedule
     public static CronSchedule FromCron(
         string     cronExpression,
         CronFormat format = CronFormat.IncludeSeconds
-    )
-        => new(CronExpression.Parse( cronExpression, format ));
+    ) =>
+        new CronSchedule( CronExpression.Parse( cronExpression, format ) );
 
     /// <summary>
     ///     Creates a simple schedule that simply triggers after a specified delay.
     /// </summary>
     /// <param name="interval">The interval at which this schedule triggers.</param>
     /// <returns>The schedule constructed from the specified interval.</returns>
-    public static IntervalSchedule FromInterval( TimeSpan interval ) => new(interval);
+    public static IntervalSchedule FromInterval( TimeSpan interval ) => new IntervalSchedule( interval );
 
     /// <summary>
     ///     Creates a new scheduler that wraps an existing schedule within a rate limiter.
@@ -65,8 +71,8 @@ public abstract class Schedule
         Schedule    baseSchedule,
         RateLimiter rateLimiter,
         TimeSpan    debounceDuration = default
-    )
-        => new(baseSchedule, rateLimiter, debounceDuration);
+    ) =>
+        new RateLimitedSchedule( baseSchedule, rateLimiter, debounceDuration );
 
     /// <summary>
     ///     Indicates that this schedule allows the job it is attached to to run immediately after being registered with the
@@ -116,6 +122,7 @@ public abstract class Schedule
     /// </returns>
     public virtual bool IsDue( DateTime relativeStart )
     {
+        if( this.IsDisabled ) return false;
         if( this._firstRun && this._runImmediately )
         {
             this._firstRun       = false;
@@ -123,13 +130,11 @@ public abstract class Schedule
             return true;
         }
 
-        relativeStart = this._lastDueAt is not null && this._lastDueAt.Value > relativeStart
-            ? this.ConvertToZonedTime( this._lastDueAt.Value )
-            : this.ConvertToZonedTime( relativeStart );
+        relativeStart = this.ConvertToZonedTime( relativeStart );
 
         this._nextDueAt ??= this.GetNextOccurrence( relativeStart );
 
-        if( this._nextDueAt.Value > relativeStart ) return false;
+        if( this._nextDueAt.Value >= relativeStart ) return false;
 
         this._lastDueAt      = this.NextDueAt;
         this._firstRun       = false;
@@ -144,8 +149,8 @@ public abstract class Schedule
     /// </summary>
     /// <param name="dateTime">The date and time to adjust.</param>
     /// <returns>The adjusted date and time.</returns>
-    protected DateTime ConvertToZonedTime( DateTime dateTime )
-        => TimeZoneInfo.ConvertTime( dateTime, this.TimeZone ?? TimeZoneInfo.Utc );
+    protected DateTime ConvertToZonedTime( DateTime dateTime ) =>
+        TimeZoneInfo.ConvertTime( dateTime, this.TimeZone ?? TimeZoneInfo.Utc );
 
     /// <summary>
     ///     Computes the date and time at which the schedule will next trigger.

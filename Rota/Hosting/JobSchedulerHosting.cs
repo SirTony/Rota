@@ -71,7 +71,8 @@ public static class JobSchedulerHosting
     /// <param name="builder">The instance of the host builder currently being configured.</param>
     /// <returns>The instance of the host builder currently being configured.</returns>
     public static IHostBuilder AddScheduler( this IHostBuilder builder )
-        => builder.ConfigureServices(
+    {
+        return builder.ConfigureServices(
             ( _, services ) => services.AddSingleton(
                                             provider => new JobScheduler(
                                                 provider.GetService<JobSchedulerConfiguration>(),
@@ -80,6 +81,7 @@ public static class JobSchedulerHosting
                                         )
                                        .AddHostedService<JobSchedulerService>()
         );
+    }
 
     /// <summary>
     ///     Retrieves the <see cref="JobScheduler" /> instance from the service container and makes it available for use.
@@ -92,10 +94,21 @@ public static class JobSchedulerHosting
     /// </exception>
     public static void UseScheduler( this IHost host, Action<JobScheduler> action )
     {
-        if( host is null ) throw new ArgumentNullException( nameof( host ) );
         if( action is null ) throw new ArgumentNullException( nameof( action ) );
+        action( host.GetScheduler() );
+    }
 
-        var scheduler = host.Services.GetRequiredService<JobScheduler>();
-        action( scheduler );
+    /// <summary>
+    ///     Retrieves the <see cref="JobScheduler" /> instance from the service container and makes it available for use.
+    /// </summary>
+    /// <param name="host">The instance of the host that has a scheduler registered.</param>
+    /// <returns>The registered <see cref="JobScheduler" />.</returns>
+    /// <exception cref="ArgumentNullException">
+    ///     Thrown when <paramref name="host" /> is <see langword="null" />.
+    /// </exception>
+    public static JobScheduler GetScheduler( this IHost host )
+    {
+        if( host is null ) throw new ArgumentNullException( nameof( host ) );
+        return host.Services.GetRequiredService<JobScheduler>();
     }
 }

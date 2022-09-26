@@ -6,6 +6,11 @@ namespace Rota;
 public enum ErrorHandlingStrategy : byte
 {
     /// <summary>
+    ///     Exceptions will not be caught.
+    /// </summary>
+    None,
+
+    /// <summary>
     ///     Ignore the exception and keep running as normal.
     /// </summary>
     Ignore,

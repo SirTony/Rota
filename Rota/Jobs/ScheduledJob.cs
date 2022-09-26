@@ -8,35 +8,13 @@ using Rota.Scheduling;
 namespace Rota.Jobs;
 
 /// <summary>
-/// Represents a job that is managed by the scheduler.
+///     Represents a job that is managed by the scheduler.
 /// </summary>
 public sealed class ScheduledJob
 {
-    /// <summary>
-    /// A unique identifier for this job.
-    /// This identifier is unique across all jobs of the same underlying type across all worker threads.
-    /// </summary>
-    public           Guid     Id       { get; }
-    
-    /// <summary>
-    /// The <see cref="Rota.Scheduling.Schedule" /> that determines when this job executes.
-    /// </summary>
-    public           Schedule Schedule { get; }
-
-    /// <summary>
-    ///     Determines whether or not this job has been disabled.
-    ///     By default, this property is set to <see langword="false" />, but may be set to <see langword="true" />
-    ///     internally if this job throws an exception during execution if
-    ///     <see cref="JobSchedulerConfiguration.ErrorHandlingStrategy" /> s set to
-    ///     <see cref="ErrorHandlingStrategy.DisableJob" />.
-    ///     It is possible to re-enable this job programatically although it will just disable itself again
-    ///     when it throws an exception unless graceful error handling is implemented.
-    /// </summary>
-    public bool IsDisabled { get; set; } = false;
-    
     private readonly JobSchedulerConfiguration _configuration;
-    private readonly Type                      _jobType;
     private readonly ImmutableArray<object?>   _constructorArguments;
+    private readonly Type                      _jobType;
 
     internal ScheduledJob(
         Guid                      id,
@@ -54,20 +32,47 @@ public sealed class ScheduledJob
         this._constructorArguments = ImmutableArray.CreateRange( ctorArgs );
     }
 
+    /// <summary>
+    ///     A unique identifier for this job.
+    ///     This identifier is unique across all jobs of the same underlying type across all worker threads.
+    /// </summary>
+    public Guid Id { get; }
+
+    /// <summary>
+    ///     The <see cref="Rota.Scheduling.Schedule" /> that determines when this job executes.
+    /// </summary>
+    public Schedule Schedule { get; }
+
+    /// <summary>
+    ///     Determines whether or not this job has been disabled.
+    ///     By default, this property is set to <see langword="false" />, but may be set to <see langword="true" />
+    ///     internally if this job throws an exception during execution if
+    ///     <see cref="JobSchedulerConfiguration.ErrorHandlingStrategy" /> s set to
+    ///     <see cref="ErrorHandlingStrategy.DisableJob" />.
+    ///     It is possible to re-enable this job programatically although it will just disable itself again
+    ///     when it throws an exception unless graceful error handling is implemented.
+    /// </summary>
+    public bool IsDisabled { get; set; }
+
     internal async ValueTask ExecuteAsync( IServiceProvider? provider, CancellationToken cancellationToken )
     {
         if( this.IsDisabled || cancellationToken.IsCancellationRequested || !this.Schedule.IsDue( DateTime.UtcNow ) )
             return;
 
+        var lease = this.Schedule is RateLimitedSchedule rateLimitedSchedule
+            ? await rateLimitedSchedule.RateLimiter.AcquireAsync( 1, cancellationToken )
+            : null;
+
+        if( lease?.IsAcquired is false ) return;
+
         var ctorArgs = this._constructorArguments.ToArray();
         var jobInstance = provider is not null
             ? ActivatorUtilities.CreateInstance( provider, this._jobType, ctorArgs! )
-            : Activator.CreateInstance(
-                this._jobType,
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                null,
-                ctorArgs,
-                CultureInfo.CurrentCulture
+            : Activator.CreateInstance( this._jobType,
+                                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                                        null,
+                                        ctorArgs,
+                                        CultureInfo.CurrentCulture
             );
 
         var logger = provider?.GetService<ILogger<ScheduledJob>>();
@@ -85,7 +90,16 @@ public sealed class ScheduledJob
         if( !String.IsNullOrWhiteSpace( job.Name ) ) Thread.CurrentThread.Name += $" [{job.Name}]";
 
         logger?.LogTrace( "executing job {FullJobName}", fullJobName );
-        try { await job.ExecuteAsync( cancellationToken ); }
+        try
+        {
+            await job.ExecuteAsync( cancellationToken );
+        }
+        catch( TaskCanceledException )
+        {
+        }
+        catch( Exception ) when( this._configuration.ErrorHandlingStrategy is ErrorHandlingStrategy.Ignore )
+        {
+        }
         catch( Exception ex )
             when( this._configuration.ErrorHandlingStrategy is ErrorHandlingStrategy.DisableJob )
         {
@@ -101,16 +115,18 @@ public sealed class ScheduledJob
             // ReSharper disable once SuspiciousTypeConversion.Global
             if( job is IAsyncDisposable asyncDisposable )
             {
-                logger?.LogTrace( "disposing job {Id} asynchronously", this.Id );
+                logger?.LogTrace( "disposing job {Id} asynchronously", this );
                 await asyncDisposable.DisposeAsync();
             }
 
             // ReSharper disable once SuspiciousTypeConversion.Global
             if( job is IDisposable disposable )
             {
-                logger?.LogTrace( "disposing job {Id} synchronously", this.Id );
+                logger?.LogTrace( "disposing job {Id} synchronously", this );
                 disposable.Dispose();
             }
+
+            lease?.Dispose();
         }
     }
 
