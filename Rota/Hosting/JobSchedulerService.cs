@@ -50,7 +50,7 @@ public sealed class JobSchedulerService : IHostedService, IDisposable
     public Task StartAsync( CancellationToken cancellationToken )
     {
         this._shouldRun = true;
-        this._lifetime.ApplicationStarted.Register(
+        _ = this._lifetime.ApplicationStarted.Register(
             () => {
                 this._logger.LogTrace( "Initializing timer" );
                 this._timer = new Timer( this.RunJobsAsync,
@@ -71,7 +71,7 @@ public sealed class JobSchedulerService : IHostedService, IDisposable
     public async Task StopAsync( CancellationToken cancellationToken )
     {
         this._logger.LogInformation( "Scheduler service stopping" );
-        this._timer?.Change( Timeout.InfiniteTimeSpan, TimeSpan.Zero );
+        _                          = this._timer?.Change( Timeout.InfiniteTimeSpan, TimeSpan.Zero );
         this._shouldRun            = false;
         this._scheduler.IsDisabled = true;
         this._scheduler.CancelAllJobs();

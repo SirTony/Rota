@@ -125,13 +125,14 @@ public sealed class JobScheduler
     }
 
     /// <summary>
-    ///     Gets a worker thread for the specified job type.
-    ///     Even if no jobs of type <typeparamref name="T" /> have been registered yet, the worker thread will be created
-    ///     and may be configured ahead of any jobs being registered to id.
+    ///     Gets a worker thread of the specified name.
+    ///     If a job runner of the specified name has not yet been created, this method will create it.
     /// </summary>
     /// <param name="workerName">The name of the worker thread.</param>
     /// <returns>The worker thread of the specified name.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="config" /> is <see langword="null" /></exception>
+    /// <exception cref="ArgumentNullException">
+    ///     Thrown when <paramref name="workerName" /> is <see langword="null" />
+    /// </exception>
     public JobRunner FindJobRunner( string workerName )
     {
         if( String.IsNullOrWhiteSpace( workerName ) )
