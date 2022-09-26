@@ -47,15 +47,15 @@ public abstract class Schedule
     public static CronSchedule FromCron(
         string     cronExpression,
         CronFormat format = CronFormat.IncludeSeconds
-    ) =>
-        new CronSchedule( CronExpression.Parse( cronExpression, format ) );
+    )
+        => new( CronExpression.Parse( cronExpression, format ) );
 
     /// <summary>
     ///     Creates a simple schedule that simply triggers after a specified delay.
     /// </summary>
     /// <param name="interval">The interval at which this schedule triggers.</param>
     /// <returns>The schedule constructed from the specified interval.</returns>
-    public static IntervalSchedule FromInterval( TimeSpan interval ) => new IntervalSchedule( interval );
+    public static IntervalSchedule FromInterval( TimeSpan interval ) => new( interval );
 
     /// <summary>
     ///     Creates a new scheduler that wraps an existing schedule within a rate limiter.
@@ -71,8 +71,8 @@ public abstract class Schedule
         Schedule    baseSchedule,
         RateLimiter rateLimiter,
         TimeSpan    debounceDuration = default
-    ) =>
-        new RateLimitedSchedule( baseSchedule, rateLimiter, debounceDuration );
+    )
+        => new( baseSchedule, rateLimiter, debounceDuration );
 
     /// <summary>
     ///     Indicates that this schedule allows the job it is attached to to run immediately after being registered with the
@@ -149,8 +149,8 @@ public abstract class Schedule
     /// </summary>
     /// <param name="dateTime">The date and time to adjust.</param>
     /// <returns>The adjusted date and time.</returns>
-    protected DateTime ConvertToZonedTime( DateTime dateTime ) =>
-        TimeZoneInfo.ConvertTime( dateTime, this.TimeZone ?? TimeZoneInfo.Utc );
+    protected DateTime ConvertToZonedTime( DateTime dateTime )
+        => TimeZoneInfo.ConvertTime( dateTime, this.TimeZone ?? TimeZoneInfo.Utc );
 
     /// <summary>
     ///     Computes the date and time at which the schedule will next trigger.

@@ -17,8 +17,8 @@ public class IntervalSchedule : Schedule
     public TimeSpan Interval { get; }
 
     /// <inheritdoc />
-    public override DateTime GetNextOccurrence( DateTime relativeStart ) =>
-        this.LastDueAt is not null
+    public override DateTime GetNextOccurrence( DateTime relativeStart )
+        => this.LastDueAt is not null
             ? this.LastDueAt.Value
             + this.Interval
             : this.ConvertToZonedTime( relativeStart )

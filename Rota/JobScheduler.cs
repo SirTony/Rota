@@ -96,8 +96,8 @@ public sealed class JobScheduler
     /// <typeparam name="T">The job type used to lookup the worker thread.</typeparam>
     /// <param name="config">A <see langword="delegate" /> used to configure the worker thread.</param>
     public void ConfigureJobRunner<T>( Action<JobRunner> config )
-        where T : IJob =>
-        this.ConfigureJobRunner( typeof( T ).FullName!, config );
+        where T : IJob
+        => this.ConfigureJobRunner( typeof( T ).FullName!, config );
 
     /// <summary>
     ///     Gets a worker thread for the specified job type.
@@ -107,8 +107,8 @@ public sealed class JobScheduler
     /// <typeparam name="T">The job type used to lookup the worker thread.</typeparam>
     /// <returns>The worker thread the specified job type <typeparamref name="T" /> will run on.</returns>
     public JobRunner FindJobRunner<T>()
-        where T : IJob =>
-        this.FindJobRunner( typeof( T ).FullName! );
+        where T : IJob
+        => this.FindJobRunner( typeof( T ).FullName! );
 
     /// <summary>
     ///     Configures a worker thread for the specified job type.
@@ -163,8 +163,8 @@ public sealed class JobScheduler
         Schedule         schedule,
         params object?[] constructorArguments
     )
-        where T : IJob =>
-        this.ScheduleJobOnWorkerImpl<T>( null, schedule, constructorArguments );
+        where T : IJob
+        => this.ScheduleJobOnWorkerImpl<T>( null, schedule, constructorArguments );
 
     /// <summary>
     ///     Registers a job on the scheduler on the specified worker thread.
@@ -182,8 +182,8 @@ public sealed class JobScheduler
         Schedule         schedule,
         params object?[] constructorArguments
     )
-        where T : IJob =>
-        this.ScheduleJobOnWorkerImpl<T>(
+        where T : IJob
+        => this.ScheduleJobOnWorkerImpl<T>(
             workerName,
             schedule,
             constructorArguments

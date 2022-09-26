@@ -21,8 +21,11 @@ public sealed class JobSchedulerService : IHostedService, IDisposable
     /// <param name="logger">The host's logging service.</param>
     /// <param name="lifetime">The host's application lifetime.</param>
     /// <param name="scheduler">The scheduler to run.</param>
-    public JobSchedulerService( ILogger<JobSchedulerService> logger, IHostApplicationLifetime lifetime,
-                                JobScheduler                 scheduler )
+    public JobSchedulerService(
+        ILogger<JobSchedulerService> logger,
+        IHostApplicationLifetime     lifetime,
+        JobScheduler                 scheduler
+    )
     {
         this._logger    = logger;
         this._scheduler = scheduler;

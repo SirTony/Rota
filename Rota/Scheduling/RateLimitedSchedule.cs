@@ -52,6 +52,6 @@ public sealed class RateLimitedSchedule : Schedule
     }
 
     /// <inheritdoc />
-    public override DateTime GetNextOccurrence( DateTime relativeStart ) =>
-        this.BaseSchedule.GetNextOccurrence( relativeStart );
+    public override DateTime GetNextOccurrence( DateTime relativeStart )
+        => this.BaseSchedule.GetNextOccurrence( relativeStart );
 }
