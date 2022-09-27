@@ -8,10 +8,11 @@ namespace Rota.Scheduling;
 /// </summary>
 public abstract class Schedule
 {
-    private bool      _firstRun = true;
-    private DateTime? _lastDueAt;
-    private DateTime? _nextDueAt;
-    private bool      _runImmediately;
+    private bool       _firstRun = true;
+    private DateTime?  _lastDueAt;
+    private DateTime?  _nextDueAt;
+    private bool       _runImmediately;
+    private Func<bool> _whenFunc;
 
     /// <summary>
     ///     The date and time at which this schedule will next trigger.
@@ -103,14 +104,32 @@ public abstract class Schedule
     /// <summary>
     ///     Specifies that the current schedule is relative to the local timezone.
     /// </summary>
-    /// <returns></returns>
+    /// <returns>The current schedule instance to allow for fluent configuration.</returns>
     public Schedule ZonedToLocal() => this.ZonedTo( TimeZoneInfo.Local );
 
     /// <summary>
     ///     Specifies that the current schedule is relative to Universal Coordinated Time.
     /// </summary>
-    /// <returns></returns>
+    /// <returns>The current schedule instance to allow for fluent configuration.</returns>
     public Schedule ZonedToUtc() => this.ZonedTo( TimeZoneInfo.Utc );
+
+    /// <summary>
+    ///     Specifies a <see langword="delegate" /> that contains conditional logic determining whether or not this schedule
+    ///     should be run at its next occurrence.
+    /// </summary>
+    /// <param name="condition">
+    ///     A <see langword="delegate" /> that contains logic to determine whether or not the schedule
+    ///     should run at its next occurrence.
+    ///     If the function returns <see langword="true" /> the schedule will trigger, if it returns <see langword="false" />
+    ///     the schedule
+    ///     will not trigger even if the underlying temporal logic indicates the due time has passed.
+    /// </param>
+    /// <returns>The current schedule instance to allow for fluent configuration.</returns>
+    public virtual Schedule When( Func<bool> condition )
+    {
+        this._whenFunc = condition;
+        return this;
+    }
 
     /// <summary>
     ///     Checks to see if this schedule is due to determine if a job should be executed.
@@ -135,6 +154,7 @@ public abstract class Schedule
         this._nextDueAt ??= this.GetNextOccurrence( relativeStart );
 
         if( this._nextDueAt.Value >= relativeStart ) return false;
+        if( this._whenFunc?.Invoke() is true ) return true;
 
         this._lastDueAt      = this.NextDueAt;
         this._firstRun       = false;
