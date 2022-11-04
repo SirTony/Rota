@@ -3,7 +3,7 @@
 /// <summary>
 ///     Defines the behaviour of a <see cref="JobScheduler" />.
 /// </summary>
-public sealed class JobSchedulerConfiguration
+public sealed record JobSchedulerConfiguration
 {
     /// <summary>
     ///     The default job scheduler configuration options.

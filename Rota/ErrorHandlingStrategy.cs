@@ -11,7 +11,7 @@ public enum ErrorHandlingStrategy : byte
     None,
 
     /// <summary>
-    ///     Ignore the exception and keep running as normal.
+    ///     Silently ignore the exception and keep running as normal.
     /// </summary>
     Ignore,
 

@@ -8,11 +8,13 @@ namespace Rota.Scheduling;
 /// </summary>
 public abstract class Schedule
 {
-    private bool       _firstRun = true;
-    private DateTime?  _lastDueAt;
-    private DateTime?  _nextDueAt;
-    private bool       _runImmediately;
-    private Func<bool> _whenFunc;
+    private bool        _firstRun = true;
+    private DateTime?   _lastDueAt;
+    private DateTime?   _nextDueAt;
+    private bool        _runImmediately;
+    private Func<bool>? _whenFunc;
+    private ulong       _maxIterations     = 0;
+    private ulong       _currentIterations = 0;
 
     /// <summary>
     ///     The date and time at which this schedule will next trigger.
@@ -132,6 +134,20 @@ public abstract class Schedule
     }
 
     /// <summary>
+    /// Sets this schedule to only execute this job a maximum number of times as defined by <paramref name="maxIterations" />.
+    /// If set to zero (the default), the job will be permitted to execute an unlimited number of times.
+    /// If multiple jobs use this schedule, each job will increment the iteration count.
+    /// </summary>
+    /// <param name="maxIterations">The limit for the total number of iterations for all jobs with this schedule.
+    /// Set to zero for unlimited.</param>
+    /// <returns>The current schedule instance to allow for fluent configuration.</returns>
+    public virtual Schedule Repeat( ulong maxIterations )
+    {
+        this._maxIterations= maxIterations;
+        return this;
+    }
+
+    /// <summary>
     ///     Checks to see if this schedule is due to determine if a job should be executed.
     /// </summary>
     /// <param name="relativeStart">The current time to compare against.</param>
@@ -142,7 +158,11 @@ public abstract class Schedule
     public virtual bool IsDue( DateTime relativeStart )
     {
         if( this.IsDisabled ) return false;
-        if( this._firstRun && this._runImmediately )
+        if( Interlocked.Read( ref this._maxIterations )     > 0
+         && Interlocked.Read( ref this._currentIterations ) >= Interlocked.Read( ref this._maxIterations ) )
+            return false;
+
+        if ( this._firstRun && this._runImmediately )
         {
             this._firstRun       = false;
             this._runImmediately = false;
@@ -156,10 +176,11 @@ public abstract class Schedule
         if( this._nextDueAt.Value >= relativeStart ) return false;
         if( this._whenFunc?.Invoke() is true ) return true;
 
-        this._lastDueAt      = this.NextDueAt;
-        this._firstRun       = false;
-        this._runImmediately = false;
-        this._nextDueAt      = null;
+        this._lastDueAt         = this.NextDueAt;
+        this._firstRun          = false;
+        this._runImmediately    = false;
+        this._nextDueAt         = null;
+        this._currentIterations = Interlocked.Increment(ref this._currentIterations);
 
         return true;
     }

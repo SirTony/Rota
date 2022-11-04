@@ -65,9 +65,11 @@ public sealed class ScheduledJob
 
         if( lease?.IsAcquired is false ) return;
 
-        var ctorArgs = this._constructorArguments.ToArray();
-        var jobInstance = provider is not null
-            ? ActivatorUtilities.CreateInstance( provider, this._jobType, ctorArgs! )
+        await using var scope    = provider?.CreateAsyncScope();
+        
+        var       ctorArgs = this._constructorArguments.ToArray();
+        var jobInstance = scope.HasValue
+            ? ActivatorUtilities.CreateInstance( scope.Value.ServiceProvider, this._jobType, ctorArgs! )
             : Activator.CreateInstance( this._jobType,
                                         BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
                                         null,
@@ -75,7 +77,7 @@ public sealed class ScheduledJob
                                         CultureInfo.CurrentCulture
             );
 
-        var logger = provider?.GetService<ILogger<ScheduledJob>>();
+        var logger = scope?.ServiceProvider.GetService<ILogger<ScheduledJob>>();
         if( jobInstance is null or not IJob )
         {
             logger?.LogTrace( "failed to activate scheduled job, aborting execution" );
